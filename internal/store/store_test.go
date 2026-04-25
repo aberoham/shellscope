@@ -3,6 +3,7 @@ package store
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"teleport-ai/internal/labels"
 )
@@ -148,6 +149,182 @@ func TestMigrate_BackfillsExistingRowsToTeleport(t *testing.T) {
 	}
 	if sub != SubstrateTeleportRecording {
 		t.Errorf("backfill: got %q, want %q", sub, SubstrateTeleportRecording)
+	}
+}
+
+// TestMergeOverlappingGCPSessions covers the reviewer's scenario in
+// review C of 4a98166: a 60-minute continuous session pulled twice
+// with different --since values yields two synthetic IDs (because
+// each pull's first visible bucket sits past the bias). Merge must
+// collapse them into the earliest-started canonical session, move
+// minute_features and labels to the canonical, drop the duplicate
+// session row, and recompute the canonical's aggregates.
+func TestMergeOverlappingGCPSessions(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "merge.sqlite")
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	principal := "alice@example.com"
+	idleThreshold := 10 * time.Minute
+
+	// First pull: --since 10:00, full session captured 10:00..11:00.
+	// 13 buckets at 5-min granularity (10:00, 10:05, ..., 11:00).
+	mustUpsertGCP(t, st, "gcp-FIRST", principal, "2026-04-25T10:00:00Z", "2026-04-25T11:01:00Z")
+	for i := 0; i <= 12; i++ {
+		mustUpsertMinute(t, st, "gcp-FIRST",
+			time.Date(2026, 4, 25, 10, i*5, 0, 0, time.UTC).Format(time.RFC3339))
+	}
+	// Stamp a label on the first session — must survive merge.
+	if err := st.SetLabel("gcp-FIRST", "operator.type", "human", "phase1", "now"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second pull: --since 10:30, bias=11m sees from 10:19 onward,
+	// first visible bucket = 10:20. 9 buckets (10:20..11:00).
+	// Different synthetic ID, partial bucket overlap with FIRST.
+	mustUpsertGCP(t, st, "gcp-SECOND", principal, "2026-04-25T10:20:00Z", "2026-04-25T11:01:00Z")
+	for i := 4; i <= 12; i++ {
+		mustUpsertMinute(t, st, "gcp-SECOND",
+			time.Date(2026, 4, 25, 10, i*5, 0, 0, time.UTC).Format(time.RFC3339))
+	}
+	// SECOND has a competing operator.type label that must NOT
+	// overwrite the canonical (FIRST) one.
+	if err := st.SetLabel("gcp-SECOND", "operator.type", "agent", "phase1-rerun", "now"); err != nil {
+		t.Fatal(err)
+	}
+	// SECOND also has a unique label that should propagate to canonical.
+	if err := st.SetLabel("gcp-SECOND", "gcp.ua.tool", "gcloud", "phase1-rerun", "now"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sentinel: a different principal's session must be untouched.
+	mustUpsertGCP(t, st, "gcp-OTHER", "bob@example.com",
+		"2026-04-25T10:30:00Z", "2026-04-25T10:35:00Z")
+	mustUpsertMinute(t, st, "gcp-OTHER", "2026-04-25T10:30:00Z")
+
+	merged, err := st.MergeOverlappingGCPSessions(principal, idleThreshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged != 1 {
+		t.Fatalf("merged count: want 1, got %d", merged)
+	}
+
+	// SECOND row gone.
+	var n int
+	if err := st.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE session_id = ?`, "gcp-SECOND").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("absorbed session still present: %d rows", n)
+	}
+
+	// FIRST keeps the union of buckets (still 13 unique).
+	if err := st.db.QueryRow(`SELECT COUNT(*) FROM gcp_minute_features WHERE session_id = ?`, "gcp-FIRST").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 13 {
+		t.Errorf("FIRST minute_features after merge: want 13, got %d", n)
+	}
+
+	// FIRST's started_at recomputed — should still be 10:00.
+	var startedAt, endedAt string
+	if err := st.db.QueryRow(
+		`SELECT started_at, ended_at FROM sessions WHERE session_id = ?`, "gcp-FIRST",
+	).Scan(&startedAt, &endedAt); err != nil {
+		t.Fatal(err)
+	}
+	if startedAt != "2026-04-25T10:00:00Z" {
+		t.Errorf("canonical started_at: got %q, want 2026-04-25T10:00:00Z", startedAt)
+	}
+	if endedAt != "2026-04-25T11:01:00Z" {
+		t.Errorf("canonical ended_at: got %q, want 2026-04-25T11:01:00Z", endedAt)
+	}
+
+	// FIRST's operator.type label preserved (canonical wins).
+	var labelValue string
+	if err := st.db.QueryRow(
+		`SELECT value FROM session_labels WHERE session_id = ? AND key = ?`,
+		"gcp-FIRST", "operator.type",
+	).Scan(&labelValue); err != nil {
+		t.Fatal(err)
+	}
+	if labelValue != "human" {
+		t.Errorf("operator.type after merge: got %q, want %q (canonical wins)", labelValue, "human")
+	}
+
+	// SECOND's gcp.ua.tool label propagated.
+	if err := st.db.QueryRow(
+		`SELECT value FROM session_labels WHERE session_id = ? AND key = ?`,
+		"gcp-FIRST", "gcp.ua.tool",
+	).Scan(&labelValue); err != nil {
+		t.Fatal(err)
+	}
+	if labelValue != "gcloud" {
+		t.Errorf("propagated label gcp.ua.tool: got %q, want gcloud", labelValue)
+	}
+
+	// Sentinel untouched.
+	if err := st.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE session_id = ?`, "gcp-OTHER").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("sentinel disturbed: %d rows", n)
+	}
+}
+
+func TestMergeOverlappingGCPSessions_NoOpWhenDisjoint(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "disjoint.sqlite")
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	mustUpsertGCP(t, st, "gcp-A", "alice@example.com",
+		"2026-04-25T10:00:00Z", "2026-04-25T10:05:00Z")
+	// Gap is 30 min — well past idle threshold of 10 min.
+	mustUpsertGCP(t, st, "gcp-B", "alice@example.com",
+		"2026-04-25T10:35:00Z", "2026-04-25T10:40:00Z")
+
+	merged, err := st.MergeOverlappingGCPSessions("alice@example.com", 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged != 0 {
+		t.Errorf("disjoint sessions should not merge; merged=%d", merged)
+	}
+}
+
+func mustUpsertGCP(t *testing.T, st *Store, sid, principal, startedAt, endedAt string) {
+	t.Helper()
+	if err := st.UpsertGCPSession(GCPSession{
+		SessionID:     sid,
+		User:          principal,
+		GCPPrincipal:  principal,
+		StartedAt:     startedAt,
+		EndedAt:       endedAt,
+		UploadedAt:    endedAt,
+		ParsedAt:      "2026-04-25T11:30:00Z",
+		ParserVersion: "test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustUpsertMinute(t *testing.T, st *Store, sid, bucket string) {
+	t.Helper()
+	if err := st.UpsertGCPMinuteFeature(GCPMinuteFeature{
+		SessionID:        sid,
+		MinuteBucket:     bucket,
+		CallCount:        1,
+		DistinctServices: 1,
+		DistinctMethods:  1,
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

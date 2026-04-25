@@ -104,6 +104,7 @@ func newPullCmd() *cobra.Command {
 				len(sessions), len(allSessions)-len(sessions))
 
 			now := time.Now().UTC().Format(time.RFC3339)
+			seenPrincipals := make(map[string]struct{}, len(sessions))
 			for _, sess := range sessions {
 				ses := store.GCPSession{
 					SessionID:             sess.SessionID,
@@ -153,6 +154,23 @@ func newPullCmd() *cobra.Command {
 					if err := stampPhase1Labels(st, ses, sess); err != nil {
 						return err
 					}
+				}
+				seenPrincipals[sess.Principal] = struct{}{}
+			}
+			// Post-pull merge: bias-back stabilises boundaries for
+			// short sessions, but a continuous session longer than
+			// idle_threshold can still split across overlapping
+			// re-pulls (the second pull's earliest visible bucket
+			// becomes a different first_bucket → different ID).
+			// Merge here collapses any such overlap into the
+			// earliest-started canonical session.
+			for principal := range seenPrincipals {
+				n, err := st.MergeOverlappingGCPSessions(principal, idleThreshold)
+				if err != nil {
+					return err
+				}
+				if n > 0 {
+					cmd.Printf("merge: absorbed %d overlapping session(s) for %s\n", n, principal)
 				}
 			}
 			return nil
