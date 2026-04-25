@@ -5,3 +5,4 @@
 [submodule "harnesses/terminal-bench"]
 	path = harnesses/terminal-bench
 	url = https://github.com/harbor-framework/terminal-bench.git
+	shallow = true
