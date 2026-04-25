@@ -2,3 +2,6 @@
 	path = upstream-repo
 	url = https://github.com/gravitational/teleport.git
 	shallow = true
+[submodule "harnesses/terminal-bench"]
+	path = harnesses/terminal-bench
+	url = https://github.com/harbor-framework/terminal-bench.git

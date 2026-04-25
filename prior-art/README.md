@@ -1,9 +1,13 @@
 # Prior Art Notes
 
-This directory tracks concise analysis of third-party work related to
-ShellScope. These files are not mirrors of vendor documentation, papers, or
-blog posts. They are local research notes that record why a source matters,
-what it appears to provide, and how it compares with the ShellScope direction.
+This directory tracks concise factual analysis of third-party work. These
+files are not mirrors of vendor documentation, papers, or blog posts. They
+are local research notes that record what a source is, what it does, and how
+it is documented.
+
+See `AGENTS.md` for the binding rules — notably: no comparisons to this
+project, no positioning, no gap analysis. Prior-art notes describe what
+exists in the source. Nothing more.
 
 ## Layout
 
@@ -20,13 +24,12 @@ Each note should usually include:
 
 - `Source`: canonical upstream URLs, with access date and source version if
   known.
-- `What it is`: short description in our own words.
-- `Relevant capabilities`: what the prior art can do.
+- `What it is`: short factual description in our own words.
+- `Relevant capabilities`: what the source can do, per its own documentation.
 - `Requirements and operating model`: what has to be deployed, enabled, or
   configured.
 - `Outputs and integration points`: artifacts, events, APIs, dashboards, logs,
   or data formats.
-- `Limitations and risks`: stated limitations plus practical concerns.
-- `Relevance to ShellScope`: overlap, differences, and design implications.
-- `Open questions`: claims that need follow-up verification.
-
+- `Limitations and risks`: limitations stated by the source.
+- `Open questions`: claims the source does not pin down and that need
+  follow-up verification against the source itself.

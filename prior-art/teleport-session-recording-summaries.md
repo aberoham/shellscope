@@ -19,9 +19,6 @@ sessions. It covers shell-oriented sessions and database sessions, and is
 presented as a way for security or compliance reviewers to understand a
 session before replaying the whole recording.
 
-This is direct prior art for ShellScope because it already applies generative
-AI to Teleport-recorded operational sessions.
-
 ## Relevant Capabilities
 
 - Summarizes recorded interactive SSH sessions.
@@ -97,30 +94,6 @@ AI to Teleport-recorded operational sessions.
 - For Teleport Cloud plus a self-managed OpenAI-compatible gateway, the gateway
   must be reachable by the Teleport Auth Service and protected like any other
   LLM API endpoint.
-
-## Relevance to ShellScope
-
-Teleport's feature is the closest known product prior art for the Teleport
-slice of ShellScope. It means ShellScope should not be positioned merely as
-"LLM summaries for Teleport sessions." That capability already exists in
-Teleport Enterprise Identity Security.
-
-Potential ShellScope differentiation:
-
-- Vendor-neutral analysis across Teleport, raw SSH logs, Tailscale SSH,
-  Kubernetes audit streams, asciinema/asciicast files, PAM session recordings,
-  and other session sources.
-- Research-grade comparison of data taps and evidence quality, not only a
-  product summarization feature.
-- Operator classification beyond summary: human vs bot vs AI agent, work type,
-  automation candidates, and confidence.
-- Batch and backfill workflows over existing object storage or audit archives.
-- Explicit evidence model that records the source events/recording spans behind
-  each summary or classification.
-- Offline or bring-your-own-model pipelines where the analysis can remain
-  inside a customer's environment.
-- Evaluation methodology: false positives, omitted critical behavior,
-  hallucinated findings, privacy leakage, and prompt-injection resistance.
 
 ## Open Questions
 

@@ -4,9 +4,9 @@ These instructions apply to files in `prior-art/`.
 
 ## Purpose
 
-Capture prior art relevant to ShellScope without copying third-party materials
-into this repository. Notes should help future readers understand the source,
-compare it to ShellScope, and cite it later in talks or papers.
+Capture prior art without copying third-party materials into this repository.
+Notes are factual records of what a source provides — useful later for
+citation, comparison, and lookup.
 
 ## Source Handling
 
@@ -21,10 +21,30 @@ compare it to ShellScope, and cite it later in talks or papers.
 - If a local scratch copy exists, use it only as temporary input. The committed
   artifact must be our analysis, not a source mirror.
 
+## Scope: facts only
+
+Prior-art notes describe what a third-party source does. They do **not**:
+
+- name this repository, this project, or any internal product;
+- compare a source to our work, position our work relative to it, or speculate
+  about gaps a future build of ours might fill;
+- editorialize about whether a source is good, bad, weak, strong, "the closest
+  competitor", "directly relevant", etc.;
+- forecast use cases, markets, customer fit, or product strategy;
+- contain a "Relevance to <our project>" section, a "Differentiation" section,
+  a "How we should position" section, or any equivalent framing.
+
+Synthesis, comparison, gap analysis, and design work belong in design docs and
+issues elsewhere — not here. A reader of `prior-art/` should be able to learn
+what each source does without ever knowing what we are building.
+
+If you find yourself writing a sentence that mentions our project, internal
+goals, or "differentiation": delete it.
+
 ## Note Structure
 
 Use the template in `prior-art/README.md` unless a source clearly needs a
-different shape. Keep the analysis focused on facts that affect ShellScope:
+different shape. Cover the source factually:
 
 - supported session types and data sources;
 - whether the system analyzes terminal output, keystrokes, process traces,
@@ -33,18 +53,20 @@ different shape. Keep the analysis focused on facts that affect ShellScope:
 - policy/routing model;
 - produced summaries, classifications, risk labels, events, or evidence;
 - deployment and credential requirements;
-- stated limitations, cost controls, retention, privacy, and safety claims;
-- how ShellScope should position itself relative to the work.
+- stated limitations, cost controls, retention, privacy, and safety claims.
 
 ## Style
 
 - Write in neutral, technical language.
-- Distinguish verified source facts from our interpretation.
+- Report what the source says or shows. Where the source is ambiguous, say so
+  with hedged wording ("the docs do not state", "appears to") or move the
+  unresolved point into Open Questions.
 - Avoid marketing language except when explicitly identifying vendor
-  positioning.
+  positioning, and even then quote sparingly.
 - Prefer stable nouns: "feature", "paper", "product", "service", "library",
   or "tool".
-- Add `Open questions` instead of guessing when a source is ambiguous.
+- Use `Open questions` for anything the source does not pin down. Do not guess
+  and do not editorialize about what the absence implies for us.
 
 ## File Naming
 
@@ -52,4 +74,3 @@ different shape. Keep the analysis focused on facts that affect ShellScope:
   `paper-short-name.md`, or `project-name.md`.
 - If multiple sources describe one product area, use one note and list all
   sources at the top.
-
