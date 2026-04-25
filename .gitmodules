@@ -1,0 +1,4 @@
+[submodule "upstream-repo"]
+	path = upstream-repo
+	url = https://github.com/gravitational/teleport.git
+	shallow = true
