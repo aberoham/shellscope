@@ -11,10 +11,6 @@ import (
 	"teleport-ai/internal/labels"
 )
 
-// SubstrateGCPCloudAudit is stamped on every row written by
-// shellscope-gcp's `pull` so cross-substrate queries can split.
-const SubstrateGCPCloudAudit = "gcp-cloud-audit"
-
 // GCPSession is the session row a GCP-side pull writes. SessionID is
 // synthetic (see internal/synthsess); User is the principalEmail.
 type GCPSession struct {
@@ -208,4 +204,45 @@ func (s *Store) UpsertGCPMinuteFeature(f GCPMinuteFeature) error {
 			f.SessionID, f.MinuteBucket, err)
 	}
 	return nil
+}
+
+// ReplaceGCPMinuteFeatures wipes any prior per-minute feature rows
+// for sessionID and inserts the supplied set in one transaction.
+// Use this rather than bare UpsertGCPMinuteFeature when re-running
+// `pull` over an overlapping date range — otherwise a re-pull that
+// sees fewer buckets (because the date range was tighter) would
+// leave stale rows that no longer reflect the synthesised session.
+func (s *Store) ReplaceGCPMinuteFeatures(sessionID string, features []GCPMinuteFeature) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		`DELETE FROM gcp_minute_features WHERE session_id=?`, sessionID,
+	); err != nil {
+		return fmt.Errorf("delete gcp_minute_features %s: %w", sessionID, err)
+	}
+	stmt, err := tx.Prepare(`
+INSERT INTO gcp_minute_features (
+  session_id, minute_bucket, call_count, distinct_services,
+  distinct_methods, impersonation_calls, denied_calls,
+  top_services_json, top_methods_json
+) VALUES (?,?,?,?,?,?,?,?,?)`)
+	if err != nil {
+		return fmt.Errorf("prepare gcp_minute_features insert: %w", err)
+	}
+	defer stmt.Close()
+	for _, f := range features {
+		if _, err := stmt.Exec(
+			sessionID, f.MinuteBucket,
+			f.CallCount, f.DistinctServices, f.DistinctMethods,
+			f.ImpersonationCalls, f.DeniedCalls,
+			nullable(f.TopServicesJSON), nullable(f.TopMethodsJSON),
+		); err != nil {
+			return fmt.Errorf("insert gcp_minute_feature %s/%s: %w",
+				sessionID, f.MinuteBucket, err)
+		}
+	}
+	return tx.Commit()
 }

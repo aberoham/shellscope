@@ -45,6 +45,11 @@ type Session struct {
 	ParsedAt         string
 	ParserVersion    string
 	ParseError       string
+	// Substrate is the data-source marker. Empty defaults to
+	// SubstrateTeleportRecording in UpsertSession because this
+	// struct + path is the Teleport flow. New substrates should
+	// use a dedicated upsert (see UpsertGCPSession).
+	Substrate string
 }
 
 type NotableEvent struct {
@@ -91,8 +96,8 @@ INSERT INTO sessions (
   duration_seconds, recording_uri, recording_bytes, pty_present,
   print_chunks, print_bytes, median_chunk_gap_ms, idle_gap_count,
   edit_char_count, command_count, bpf_present, single_shot, join_count,
-  parsed_at, parser_version, parse_error
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  parsed_at, parser_version, parse_error, substrate
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(session_id) DO UPDATE SET
   user                = excluded.user,
   cluster             = excluded.cluster,
@@ -115,10 +120,15 @@ ON CONFLICT(session_id) DO UPDATE SET
   join_count          = excluded.join_count,
   parsed_at           = excluded.parsed_at,
   parser_version      = excluded.parser_version,
-  parse_error         = excluded.parse_error
+  parse_error         = excluded.parse_error,
+  substrate           = excluded.substrate
 `
 
 func (s *Store) UpsertSession(r Session) error {
+	substrate := r.Substrate
+	if substrate == "" {
+		substrate = SubstrateTeleportRecording
+	}
 	_, err := s.db.Exec(upsertSessionSQL,
 		r.SessionID, r.User, nullable(r.Cluster), nullable(r.Kind),
 		nullable(r.StartedAt), nullable(r.EndedAt), nullable(r.UploadedAt),
@@ -129,6 +139,7 @@ func (s *Store) UpsertSession(r Session) error {
 		r.EditCharCount, r.CommandCount, boolToInt(r.BPFPresent),
 		boolToInt(r.SingleShot), r.JoinCount,
 		r.ParsedAt, r.ParserVersion, nullable(r.ParseError),
+		substrate,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert %s: %w", r.SessionID, err)

@@ -47,6 +47,18 @@ func newPullCmd() *cobra.Command {
 			// Make --until inclusive by extending to end-of-day UTC.
 			u = u.Add(24*time.Hour - time.Nanosecond)
 
+			// Bias the BQ window backward by idle_threshold + 1m so a
+			// session whose first bucket is just before --since still
+			// gets its lead-in captured. Without this, a re-pull that
+			// starts later than the original would synthesise a new
+			// (different) session ID for the same activity, leaving the
+			// old row stale. Sessions whose latest bucket falls before
+			// --since are filtered out below — the bias is only there
+			// to stabilise boundaries, not to widen results.
+			idleThreshold := time.Duration(idleSeconds) * time.Second
+			bias := idleThreshold + time.Minute
+			queryStart := s.Add(-bias)
+
 			ctx := cmd.Context()
 			dbPath, _ := cmd.Flags().GetString("db")
 			st, err := store.Open(dbPath)
@@ -68,18 +80,28 @@ func newPullCmd() *cobra.Command {
 			}
 			defer bq.Close()
 
-			cmd.Printf("bq: querying %s.%s.%s [%s, %s] principal=%q\n",
+			cmd.Printf("bq: querying %s.%s.%s [%s, %s] (bias=%s) principal=%q\n",
 				auditProject, dataset, table,
-				s.Format(time.RFC3339), u.Format(time.RFC3339), principal)
+				queryStart.Format(time.RFC3339), u.Format(time.RFC3339),
+				bias, principal)
 
-			rows, err := bq.QueryMinuteFeatures(ctx, s, u, principal)
+			rows, err := bq.QueryMinuteFeatures(ctx, queryStart, u, principal)
 			if err != nil {
 				return err
 			}
 			cmd.Printf("bq: %d (principal, minute) feature rows\n", len(rows))
 
-			sessions := synthsess.Synthesise(rows, time.Duration(idleSeconds)*time.Second)
-			cmd.Printf("synth: %d sessions\n", len(sessions))
+			allSessions := synthsess.Synthesise(rows, idleThreshold)
+			// Drop bias-zone-only sessions: keep only those with
+			// activity actually within [s, u].
+			sessions := allSessions[:0]
+			for _, sess := range allSessions {
+				if sess.EndedAt.After(s) {
+					sessions = append(sessions, sess)
+				}
+			}
+			cmd.Printf("synth: %d sessions (%d filtered as bias-only)\n",
+				len(sessions), len(allSessions)-len(sessions))
 
 			now := time.Now().UTC().Format(time.RFC3339)
 			for _, sess := range sessions {
@@ -106,8 +128,9 @@ func newPullCmd() *cobra.Command {
 				if err := st.UpsertGCPSession(ses); err != nil {
 					return err
 				}
+				features := make([]store.GCPMinuteFeature, 0, len(sess.Buckets))
 				for _, b := range sess.Buckets {
-					if err := st.UpsertGCPMinuteFeature(store.GCPMinuteFeature{
+					features = append(features, store.GCPMinuteFeature{
 						SessionID:          sess.SessionID,
 						MinuteBucket:       b.MinuteBucket.UTC().Format(time.RFC3339),
 						CallCount:          b.CallCount,
@@ -117,9 +140,14 @@ func newPullCmd() *cobra.Command {
 						DeniedCalls:        b.DeniedCalls,
 						TopServicesJSON:    b.TopServicesJSON,
 						TopMethodsJSON:     b.TopMethodsJSON,
-					}); err != nil {
-						return err
-					}
+					})
+				}
+				// Replace, not upsert: a re-pull with a tighter range
+				// (or different bias) might see fewer buckets for this
+				// synthetic session, and stale per-minute rows would
+				// otherwise survive.
+				if err := st.ReplaceGCPMinuteFeatures(sess.SessionID, features); err != nil {
+					return err
 				}
 				if stampLabels {
 					if err := stampPhase1Labels(st, ses, sess); err != nil {

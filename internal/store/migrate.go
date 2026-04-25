@@ -63,5 +63,16 @@ func (s *Store) migrate() error {
 			return fmt.Errorf("post-launch index: %w", err)
 		}
 	}
+	// Backfill: any pre-existing row predates the substrate column,
+	// and prior to that column there was only one substrate flow
+	// (Teleport). Stamp those rows so cross-substrate queries that
+	// filter on substrate=teleport-recording catch them too.
+	// Idempotent: subsequent calls find no NULL rows and do nothing.
+	if _, err := s.db.Exec(
+		`UPDATE sessions SET substrate = ? WHERE substrate IS NULL`,
+		SubstrateTeleportRecording,
+	); err != nil {
+		return fmt.Errorf("backfill substrate: %w", err)
+	}
 	return nil
 }
