@@ -21,11 +21,10 @@ import (
 )
 
 type Config struct {
-	Workgroup    string
-	Database     string
-	Catalog      string
-	BytesScanCap int64
-	Region       string
+	Workgroup string
+	Database  string
+	Catalog   string
+	Region    string
 }
 
 type Client struct {
@@ -74,7 +73,8 @@ SELECT uid, event_time, session_id, user,
        json_extract_scalar(event_data, '$.url')          AS recording_uri,
        json_extract_scalar(event_data, '$.cluster_name') AS cluster
 FROM   %s.%s
-WHERE  event_type = 'session.upload'
+WHERE  event_date BETWEEN date('%s') AND date('%s')
+  AND  event_type = 'session.upload'
   AND  session_id = '%s'
 LIMIT  10`
 
@@ -85,16 +85,26 @@ func (c *Client) QueryRange(ctx context.Context, since, until time.Time) ([]Uplo
 	return c.run(ctx, q)
 }
 
-func (c *Client) QuerySession(ctx context.Context, sessionID string) ([]UploadRow, error) {
+// QuerySession looks up a single session within [since, until]. The
+// date bounds are mandatory because event_date is the table's partition
+// key — without them Athena would scan every partition for the lookup.
+func (c *Client) QuerySession(ctx context.Context, since, until time.Time, sessionID string) ([]UploadRow, error) {
 	if !validSessionID(sessionID) {
 		return nil, fmt.Errorf("invalid session id %q", sessionID)
 	}
 	q := fmt.Sprintf(querySessionSQL,
-		safeIdent(c.cfg.Database), "teleport_events", sessionID)
+		safeIdent(c.cfg.Database), "teleport_events",
+		since.Format("2006-01-02"), until.Format("2006-01-02"),
+		sessionID)
 	return c.run(ctx, q)
 }
 
 func (c *Client) run(ctx context.Context, q string) ([]UploadRow, error) {
+	// Per-query bytes-scanned caps are not exposed by the AWS Athena
+	// StartQueryExecution API; the cap is configured on the workgroup
+	// itself (BytesScannedCutoffPerQuery on the workgroup configuration).
+	// Set it once with `aws athena update-work-group` against the
+	// workgroup the customer hands us.
 	startIn := &athena.StartQueryExecutionInput{
 		QueryString: aws.String(q),
 		WorkGroup:   aws.String(c.cfg.Workgroup),
@@ -102,9 +112,6 @@ func (c *Client) run(ctx context.Context, q string) ([]UploadRow, error) {
 			Catalog:  aws.String(c.cfg.Catalog),
 			Database: aws.String(c.cfg.Database),
 		},
-	}
-	if c.cfg.BytesScanCap > 0 {
-		startIn.ResultReuseConfiguration = nil // explicit: no reuse
 	}
 	start, err := c.api.StartQueryExecution(ctx, startIn)
 	if err != nil {

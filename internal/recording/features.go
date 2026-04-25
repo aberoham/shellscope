@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 	"time"
 
 	apievents "github.com/gravitational/teleport/api/types/events"
@@ -68,7 +67,34 @@ func Extract(ctx context.Context, r io.Reader) (Features, []store.NotableEvent, 
 			seenStart = true
 			feat.User = e.User
 			feat.Cluster = e.ClusterName
-			feat.Kind = inferKind(e)
+			feat.Kind = inferSSHKind(e)
+			if !e.Time.IsZero() {
+				feat.StartedAt = e.Time
+				startKnown = true
+			}
+		case *apievents.DatabaseSessionStart:
+			seenStart = true
+			feat.User = e.User
+			feat.Cluster = e.ClusterName
+			feat.Kind = "db"
+			if !e.Time.IsZero() {
+				feat.StartedAt = e.Time
+				startKnown = true
+			}
+		case *apievents.AppSessionStart:
+			seenStart = true
+			feat.User = e.User
+			feat.Cluster = e.ClusterName
+			feat.Kind = "app"
+			if !e.Time.IsZero() {
+				feat.StartedAt = e.Time
+				startKnown = true
+			}
+		case *apievents.WindowsDesktopSessionStart:
+			seenStart = true
+			feat.User = e.User
+			feat.Cluster = e.ClusterName
+			feat.Kind = "desktop"
 			if !e.Time.IsZero() {
 				feat.StartedAt = e.Time
 				startKnown = true
@@ -84,6 +110,39 @@ func Extract(ctx context.Context, r io.Reader) (Features, []store.NotableEvent, 
 				startKnown = true
 			}
 			feat.Interactive = e.Interactive
+			if feat.User == "" {
+				feat.User = e.User
+			}
+		case *apievents.DatabaseSessionEnd:
+			if !e.EndTime.IsZero() {
+				feat.EndedAt = e.EndTime
+			} else if !e.Time.IsZero() {
+				feat.EndedAt = e.Time
+			}
+			if !startKnown && !e.StartTime.IsZero() {
+				feat.StartedAt = e.StartTime
+				startKnown = true
+			}
+			if feat.User == "" {
+				feat.User = e.User
+			}
+		case *apievents.AppSessionEnd:
+			if !e.Time.IsZero() {
+				feat.EndedAt = e.Time
+			}
+			if feat.User == "" {
+				feat.User = e.User
+			}
+		case *apievents.WindowsDesktopSessionEnd:
+			if !e.EndTime.IsZero() {
+				feat.EndedAt = e.EndTime
+			} else if !e.Time.IsZero() {
+				feat.EndedAt = e.Time
+			}
+			if !startKnown && !e.StartTime.IsZero() {
+				feat.StartedAt = e.StartTime
+				startKnown = true
+			}
 			if feat.User == "" {
 				feat.User = e.User
 			}
@@ -161,20 +220,16 @@ func ApplyFeatures(s *store.Session, f Features) {
 	s.JoinCount = f.JoinCount
 }
 
-func inferKind(s *apievents.SessionStart) string {
+// inferSSHKind classifies a *SessionStart event. SSH and kube exec both
+// use this type — kube is distinguished by KubernetesClusterMetadata.
+// Database, app, and windows-desktop sessions use distinct event types
+// (DatabaseSessionStart, AppSessionStart, WindowsDesktopSessionStart)
+// and are classified at the call site, not here.
+func inferSSHKind(s *apievents.SessionStart) string {
 	if s.KubernetesCluster != "" {
 		return "kube"
 	}
-	switch {
-	case strings.HasPrefix(s.Type, "db."):
-		return "db"
-	case strings.HasPrefix(s.Type, "windows.desktop."), strings.HasPrefix(s.Type, "desktop."):
-		return "desktop"
-	case strings.HasPrefix(s.Type, "app."):
-		return "app"
-	default:
-		return "ssh"
-	}
+	return "ssh"
 }
 
 // isSingleShot identifies non-PTY exec-style invocations: no PTY, very

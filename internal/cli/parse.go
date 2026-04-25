@@ -48,10 +48,8 @@ func newParseCmd() *cobra.Command {
 			if err := st.UpsertSession(ses); err != nil {
 				return err
 			}
-			for _, n := range notable {
-				if err := st.InsertNotable(ses.SessionID, n); err != nil {
-					return err
-				}
+			if err := st.ReplaceNotable(ses.SessionID, notable); err != nil {
+				return err
 			}
 			cmd.Printf("parsed %s: kind=%s pty=%v print_chunks=%d notable=%d\n",
 				sid, ses.Kind, ses.PTYPresent, ses.PrintChunks, len(notable))

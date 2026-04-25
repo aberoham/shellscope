@@ -113,6 +113,66 @@ func TestExtract_HumanLikeSSH(t *testing.T) {
 	}
 }
 
+func TestExtract_DatabaseSession(t *testing.T) {
+	start := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
+	end := start.Add(30 * time.Second)
+	events := []apievents.AuditEvent{
+		&apievents.DatabaseSessionStart{
+			Metadata:        apievents.Metadata{Index: 0, Type: "db.session.start", Time: start, ClusterName: "main"},
+			UserMetadata:    apievents.UserMetadata{User: "abe"},
+			SessionMetadata: apievents.SessionMetadata{SessionID: "sid-db"},
+		},
+		&apievents.DatabaseSessionEnd{
+			Metadata:        apievents.Metadata{Index: 1, Type: "db.session.end", Time: end},
+			UserMetadata:    apievents.UserMetadata{User: "abe"},
+			SessionMetadata: apievents.SessionMetadata{SessionID: "sid-db"},
+			StartTime:       start,
+			EndTime:         end,
+		},
+	}
+	stream := writeStream(t, events)
+	feat, _, err := Extract(context.Background(), bytes.NewReader(stream))
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if feat.Kind != "db" {
+		t.Errorf("Kind=%q want db", feat.Kind)
+	}
+	if feat.User != "abe" {
+		t.Errorf("User=%q want abe", feat.User)
+	}
+	if !feat.StartedAt.Equal(start) || !feat.EndedAt.Equal(end) {
+		t.Errorf("times: started=%v ended=%v", feat.StartedAt, feat.EndedAt)
+	}
+}
+
+func TestExtract_WindowsDesktopSession(t *testing.T) {
+	start := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
+	end := start.Add(60 * time.Second)
+	events := []apievents.AuditEvent{
+		&apievents.WindowsDesktopSessionStart{
+			Metadata:        apievents.Metadata{Index: 0, Type: "windows.desktop.session.start", Time: start},
+			UserMetadata:    apievents.UserMetadata{User: "abe"},
+			SessionMetadata: apievents.SessionMetadata{SessionID: "sid-win"},
+		},
+		&apievents.WindowsDesktopSessionEnd{
+			Metadata:        apievents.Metadata{Index: 1, Type: "windows.desktop.session.end", Time: end},
+			UserMetadata:    apievents.UserMetadata{User: "abe"},
+			SessionMetadata: apievents.SessionMetadata{SessionID: "sid-win"},
+			StartTime:       start,
+			EndTime:         end,
+		},
+	}
+	stream := writeStream(t, events)
+	feat, _, err := Extract(context.Background(), bytes.NewReader(stream))
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if feat.Kind != "desktop" {
+		t.Errorf("Kind=%q want desktop", feat.Kind)
+	}
+}
+
 func TestExtract_AgentLikeSingleShotKube(t *testing.T) {
 	start := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
 	end := start.Add(2 * time.Second)
