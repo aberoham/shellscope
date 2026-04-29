@@ -1,3 +1,7 @@
 # Scratch copies of third-party documentation used only for local analysis.
 notes/teleport-hosted-session-summaries.md
 
+# Terminal-Bench output: per-run logs, results, and asciinema recordings
+# from harnesses/terminal-bench-teleport runner. Ephemeral, contains
+# absolute paths and local usernames.
+/runs/

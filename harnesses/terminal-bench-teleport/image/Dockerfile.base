@@ -1,0 +1,27 @@
+# Base image every patched Terminal-Bench task FROM-extends.
+#
+# Layout:
+#   - copy teleport binary out of the official OSS image (multi-stage)
+#   - layer onto the t-bench python-3-13 base so the rest of each task's
+#     Dockerfile keeps working unchanged
+#   - install tmux/openssh-client (most are already there but be defensive)
+#   - install entrypoint that joins the cluster as a Node, then exec's the
+#     task's CMD (typically `sleep infinity`)
+
+FROM public.ecr.aws/gravitational/teleport-distroless:17.7.20 AS teleport
+FROM ghcr.io/laude-institute/t-bench/python-3-13:20250620
+
+COPY --from=teleport /usr/local/bin/teleport /usr/local/bin/teleport
+COPY --from=teleport /usr/local/bin/tctl     /usr/local/bin/tctl
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        openssh-client tmux ca-certificates curl gettext-base \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 1100 -s /bin/bash agent
+
+COPY entrypoint.sh /usr/local/bin/tbench-teleport-entry
+RUN chmod +x /usr/local/bin/tbench-teleport-entry
+
+ENTRYPOINT ["/usr/local/bin/tbench-teleport-entry"]

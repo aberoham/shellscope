@@ -1,0 +1,25 @@
+services:
+  teleport-auth:
+    image: public.ecr.aws/gravitational/teleport-distroless:17.7.20
+    container_name: tbench-fixture-auth
+    hostname: tbench-fixture-auth
+    restart: unless-stopped
+    networks:
+      tbench-fixture-net:
+        aliases:
+          - teleport.local
+    ports:
+      - "3080:3080"   # web / proxy (multiplexed: SSH rides over TLS here)
+      - "3024:3024"   # reverse tunnel (for nodes outside the docker network)
+      - "3025:3025"   # auth gRPC
+    volumes:
+      - ./teleport.yaml:/etc/teleport/teleport.yaml:ro
+      - ./data:/var/lib/teleport
+    # No `command:` here — the image's ENTRYPOINT already runs
+    # `teleport start -c /etc/teleport/teleport.yaml`. Adding a command
+    # appends to it and produces a duplicate `start` (resulting in
+    # "unexpected start"). Just rely on the image default.
+
+networks:
+  tbench-fixture-net:
+    name: tbench-fixture-net

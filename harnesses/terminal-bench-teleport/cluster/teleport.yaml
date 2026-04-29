@@ -1,0 +1,41 @@
+version: v3
+teleport:
+  nodename: tbench-fixture-auth
+  data_dir: /var/lib/teleport
+  log:
+    severity: INFO
+    output: stderr
+
+auth_service:
+  enabled: true
+  cluster_name: tbench-fixture
+  listen_addr: 0.0.0.0:3025
+  authentication:
+    type: local
+    # v17 refuses to start with second_factor: off. We never log in
+    # interactively (the controller uses a tctl-signed identity file),
+    # so MFA is declared but never exercised. rp_id=localhost keeps
+    # the web UI happy in case anyone opens it for debugging.
+    second_factor: webauthn
+    webauthn:
+      rp_id: localhost
+  # node-sync finalises the recording when the SSH session ends.
+  # Required so harvest.py can pick up <sid>.tar promptly without
+  # waiting for the UploadCompleter background loop.
+  session_recording: "node-sync"
+  # multiplex puts SSH proxy on the web port so we don't need to
+  # expose a separate 3023 listener for tsh ssh from the host.
+  proxy_listener_mode: multiplex
+
+proxy_service:
+  enabled: true
+  web_listen_addr: 0.0.0.0:3080
+  tunnel_listen_addr: 0.0.0.0:3024
+  public_addr: ["localhost:3080"]
+  # Default proxy_listener_mode is "multiplex" — TLS-routed SSH-via-WebSocket
+  # rides on the web port, no separate SSH listener needed.
+  # Self-signed cert auto-generated on first start. Controllers
+  # must pass --insecure to tsh.
+
+ssh_service:
+  enabled: false
