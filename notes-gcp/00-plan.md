@@ -1,7 +1,7 @@
 # 00 — Plan: GCP-side privileged-user activity classifier
 
 > Companion to the Teleport `notes/00-step1-plan.md`. This plan extends
-> the `shellscope` classifier scope from Teleport session audit +
+> the `whodrove` classifier scope from Teleport session audit +
 > recordings to GCP Cloud Audit Logs and friends. The end state is the
 > same: a per-session record in SQLite with K8s-style labels
 > (`operator.type`, `agent.tool`, `work.kind`, `routing.cohort`, …)
@@ -40,7 +40,7 @@ Teleport side are a later step.
    as durable markdown research notes under `notes-gcp/`.
 2. Decide where the GCP-side classifier should tap (BigQuery direct
    vs Pub/Sub vs Chronicle), and design a Go binary analogous to
-   `teleport-analyze` that ingests into the same SQLite labels schema.
+   `whodrove-teleport` that ingests into the same SQLite labels schema.
 3. Build the actual GCP-side classifier — including the call-graph
    cadence model that has to substitute for PTY cadence.
 
@@ -98,7 +98,7 @@ back to GCP product documentation rather than `path:line` into a repo.
 | 3 | `notes-gcp/03-ecosystem-and-apis.md` | Components, identity systems, Log Router, Asset Inventory, the GCP equivalents of "components emit through gRPC to auth" |
 | 4 | `notes-gcp/04-org-aggregation-and-storage.md` | **Weighted.** FFF aggregated sink, BigQuery dataset shape, GCS archive layout, Chronicle path, retention, cost. |
 | 5 | `notes-gcp/05-tap-points-for-detection.md` | BigQuery direct, Pub/Sub stream, Cloud Logging API, GCS archive, Chronicle — auth, latency, fidelity, cost |
-| 6 | `notes-gcp/06-pipeline-design.md` | KISS Go-CLI mirroring `teleport-analyze`: BigQuery extract → SQLite with K8s-style classification labels; per-`(principal, window)` synthetic sessions |
+| 6 | `notes-gcp/06-pipeline-design.md` | KISS Go-CLI mirroring `whodrove-teleport`: BigQuery extract → SQLite with K8s-style classification labels; per-`(principal, window)` synthetic sessions |
 | 7 | `notes-gcp/99-open-questions.md` | What we couldn't answer from product docs alone, with a verification recipe per item |
 
 ### Validation approach
@@ -115,7 +115,7 @@ Same three layers as the Teleport notes:
 
 ### Out of scope for step 1
 
-- No code changes to the existing `cmd/teleport-analyze` binary or
+- No code changes to the existing `cmd/whodrove-teleport` binary or
   `internal/` packages.
 - No connection to the live GCP org (these notes are derived from
   product docs + the FFF blueprint as published).
@@ -128,14 +128,14 @@ Same three layers as the Teleport notes:
 When step 1's notes exist and have been spot-checked, step 2 takes
 `notes-gcp/06-pipeline-design.md` and either:
 
-- Extends the existing `teleport-analyze` Go binary with a
+- Extends the existing `whodrove-teleport` Go binary with a
   `gcp-pull` subcommand family that queries BigQuery, OR
 - Builds a sibling `cmd/gcp-analyze` binary that writes into the same
   `sessions.sqlite` labels schema.
 
 Either way, the SQLite output is shared with the Teleport side, so
 the step-3 classifier rules can ingest both substrates uniformly.
-The schema decision tilts toward "extend `teleport-analyze` with a
+The schema decision tilts toward "extend `whodrove-teleport` with a
 `--substrate` flag" rather than a separate binary, but the call is
 deferred to the start of step 2 when we have a clearer picture of
 how much GCP-specific code is needed.
