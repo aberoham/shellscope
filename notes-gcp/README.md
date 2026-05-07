@@ -1,4 +1,4 @@
-# shellscope GCP Notes — Cloud Audit Logs & Privileged-User Activity
+# whodrove GCP Notes — Cloud Audit Logs & Privileged-User Activity
 
 These notes are the GCP-side counterpart to `notes/`. They map the same
 problem — "where does privileged-user activity live, and how does a
@@ -51,7 +51,7 @@ Read sequentially the first time. Cross-reference freely after that.
 | [03 — Ecosystem and APIs](03-ecosystem-and-apis.md) | Components, identity systems, Log Router, Asset Inventory, the GCP equivalents of "components emit through gRPC to auth" |
 | [04 — Org aggregation and storage](04-org-aggregation-and-storage.md) | **Weighted.** The FFF aggregated sink, BigQuery dataset shape, GCS archive layout, Chronicle path, retention. Most relevant file for this work. |
 | [05 — Tap points for detection](05-tap-points-for-detection.md) | BigQuery direct, Pub/Sub stream, Cloud Logging API, GCS archive, Chronicle — auth, latency, fidelity, cost |
-| [06 — Pipeline design](06-pipeline-design.md) | KISS Go-CLI mirroring `teleport-analyze`: BigQuery extract → SQLite with K8s-style classification labels |
+| [06 — Pipeline design](06-pipeline-design.md) | KISS Go-CLI mirroring `whodrove-teleport`: BigQuery extract → SQLite with K8s-style classification labels |
 | [99 — Open questions](99-open-questions.md) | What we couldn't answer from product docs alone, with a verification recipe per item |
 
 ## Conventions

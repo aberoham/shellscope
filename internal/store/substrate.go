@@ -9,9 +9,9 @@ package store
 // any deployed databases.
 const (
 	// SubstrateTeleportRecording marks rows produced by the
-	// Teleport-side flow (teleport-analyze).
+	// Teleport-side flow (whodrove-teleport).
 	SubstrateTeleportRecording = "teleport-recording"
 
-	// SubstrateGCPCloudAudit marks rows produced by shellscope-gcp.
+	// SubstrateGCPCloudAudit marks rows produced by whodrove-gcp.
 	SubstrateGCPCloudAudit = "gcp-cloud-audit"
 )

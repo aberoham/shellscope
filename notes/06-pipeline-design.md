@@ -43,7 +43,7 @@ sessions to a separate cohort.
 ## Architecture
 
 ```
-macOS / Linux $ teleport-analyze pull --since 2026-03-25 --until 2026-04-25
+macOS / Linux $ whodrove-teleport pull --since 2026-03-25 --until 2026-04-25
     │
     ├── Athena query (aws-sdk-go-v2) for T2005I session.upload events,
     │   partition-pruned by event_date
@@ -68,7 +68,7 @@ real-time tap on top of the same SQLite if alerting latency demands it.
 
 ## CLI shape
 
-Single Go binary, `go install ./cmd/teleport-analyze`. Static, no CGO when
+Single Go binary, `go install ./cmd/whodrove-teleport`. Static, no CGO when
 built with `modernc.org/sqlite`. Runs on macOS and Linux.
 
 Subcommands:
@@ -181,7 +181,7 @@ CREATE TABLE sessions (
   join_count            INTEGER,      -- moderation/co-shell joiners
   -- bookkeeping
   parsed_at             TEXT NOT NULL,
-  parser_version        TEXT NOT NULL, -- the teleport-analyze version
+  parser_version        TEXT NOT NULL, -- the whodrove-teleport version
   parse_error           TEXT
 );
 CREATE INDEX idx_sessions_user      ON sessions(user);
@@ -231,7 +231,7 @@ Label conventions, documented in this doc and enforced loosely by the CLI:
 
 Selector example (Kubernetes-style):
 
-`teleport-analyze label ls --selector operator.type=agent,agent.tool=claude-code`
+`whodrove-teleport label ls --selector operator.type=agent,agent.tool=claude-code`
 
 ```sql
 SELECT s.* FROM sessions s

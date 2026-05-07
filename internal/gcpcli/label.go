@@ -51,7 +51,7 @@ func newLabelSetCmd() *cobra.Command {
 // newLabelLsCmd lists sessions matching a Kubernetes-style selector.
 // Output columns are GCP-flavoured: principal, sample UA, bucket
 // count, call count, denials, started_at. To list Teleport-side
-// sessions, use teleport-analyze label ls.
+// sessions, use whodrove-teleport label ls.
 func newLabelLsCmd() *cobra.Command {
 	var selectorStr string
 	cmd := &cobra.Command{

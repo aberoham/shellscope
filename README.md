@@ -1,7 +1,25 @@
-# shellscope
+# whodrove
 
-A study of how various popular systems (Teleport, GCP, AWS) capture audit events and session recordings,
-including the vibe-sketch of a session classifier on top of a live Cloud + External Audit Storage tenant. 
+Tools for studying who or what drove privileged principals.
+
+`whodrove` mines audit events and session recordings from Teleport
+and GCP (AWS is on the roadmap, less fertile) and, for each
+privileged session, asks: was the driver a human, or a
+**ghostdriver**?
+
+> A **ghostdriver** is non-human activity operating through a human
+> principal — in practice, an LLM-driven coding-agent harness issuing
+> commands via the human's credentials on a high-privilege operator
+> surface (kubectl, gcloud, aws-cli, SSH/Teleport, terraform, and
+> similar). The audit log shows the human's identity; the steering
+> wheel is held by something else.
+
+Once a session is classified as ghostdriven, the secondary goal is
+fingerprinting *which* model and *which* harness from cadence and
+call-graph shape. A bonus target is the human-pumped-up-by-an-LLM
+operator — someone exercising privileged credentials they'd never
+wield without an agent dictating the next flag — whose cadence
+deviates the same way ghostdrivers' does.
 
 ## Layout
 
@@ -17,7 +35,7 @@ including the vibe-sketch of a session classifier on top of a live Cloud + Exter
 
 The work has a multi-step plan; each step's output is a durable
 artifact under `notes/` (Teleport substrate) or `notes-gcp/` (GCP
-substrate). Both substrates will feed the same `sessions.sqlite` /
+substrate). Both substrates feed the same `sessions.sqlite` /
 labels schema used in later steps.
 
 - **Step 1 — Plumbing research.**
@@ -31,22 +49,23 @@ labels schema used in later steps.
     [`notes-gcp/99-open-questions.md`](./notes-gcp/99-open-questions.md).
 - **Step 2 — Pipeline design.**
   - *Teleport:* See [`notes/06-pipeline-design.md`](./notes/06-pipeline-design.md):
-    a single static Go binary `teleport-analyze` that taps Athena for
+    a single static Go binary `whodrove-teleport` that taps Athena for
     `session.upload` events and S3 directly for recordings, parses
     ProtoStreamV1 via `lib/events.NewProtoReader`, and upserts
     per-session features plus Kubernetes-style classification labels
     into a local `sessions.sqlite`.
   - *GCP:* See [`notes-gcp/06-pipeline-design.md`](./notes-gcp/06-pipeline-design.md):
-    a sibling Go binary (or extension of `teleport-analyze`) that
-    queries BigQuery for per-`(principal, minute)` feature rows,
-    synthesises sessions by gluing adjacent buckets, and writes into
-    the same `sessions.sqlite` with GCP-flavoured labels
+    a sibling Go binary `whodrove-gcp` that queries BigQuery for
+    per-`(principal, minute)` feature rows, synthesises sessions by
+    gluing adjacent buckets, and writes into the same
+    `sessions.sqlite` with GCP-flavoured labels
     (`substrate.kind=gcp-cloud-audit`, `gcp.ua.tool`, etc.).
 - **Step 3 — Classifier.** Outstanding. Reads from the shared SQLite
-  extract; phase-1 is rules-only (Teleport: "is this a human
-  terminal?"; GCP: "is this an operator-driven session?"), phase-2 is
+  extract; phase-1 is rules-only ("ghostdriver y/n", with cohort
+  routing for substrates the rules don't apply to), phase-2 is
   LLM-on-call-graph (or PTY bytes, on the Teleport side) for sessions
-  phase-1 routes to it.
+  phase-1 routes to it. Phase-2 is also where harness fingerprinting
+  lives — *which* model, *which* agent harness.
 
 ## Conventions
 
@@ -88,5 +107,5 @@ The submodules are shallow by design; pinning is what guarantees
 reproducibility, not history depth. The `submodule.e.update = none`
 setting must live in `upstream-repo`'s local config because that is
 the only repo where `e` is a direct submodule — setting it at the
-shellscope or outer-project level has no effect. Subsequent recursive
+whodrove or outer-project level has no effect. Subsequent recursive
 updates will report `Skipping submodule 'upstream-repo/e'`.

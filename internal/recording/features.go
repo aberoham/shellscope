@@ -16,7 +16,7 @@ import (
 
 // ParserVersion is stamped on each upserted row. Bump when the feature
 // extraction logic changes in a way that warrants a re-parse.
-const ParserVersion = "teleport-analyze@0.1"
+const ParserVersion = "whodrove-teleport@0.1"
 
 // idleGapThreshold is the inter-chunk gap above which we count an "idle
 // gap." Two seconds is the working default; tune as classifier evidence

@@ -2,7 +2,7 @@
 
 This file is the GCP-side counterpart to `notes/06-pipeline-design.md`.
 It picks tap points, sketches a Go binary that fits the existing
-`shellscope` shape (mirroring `cmd/teleport-analyze`), names the
+`whodrove` shape (mirroring `cmd/whodrove-teleport`), names the
 BigQuery query that drives it, and extends the Teleport-side SQLite
 schema (the K8s-style labels) with GCP-specific feature columns.
 
@@ -36,7 +36,7 @@ training data, and any alerting. Those are step 3.
 ## Architecture
 
 ```
-macOS / Linux $ shellscope-gcp pull --since 2026-03-25 --until 2026-04-25
+macOS / Linux $ whodrove-gcp pull --since 2026-03-25 --until 2026-04-25
     │
     ├── BigQuery query (cloud.google.com/go/bigquery) for per-(principal,
     │   minute) feature rows over the audit dataset, partition-pruned by
@@ -68,14 +68,14 @@ if alerting latency demands it.
 
 ## Binary shape
 
-Decision deferred to start of step 2: **extend `teleport-analyze`
-with `--substrate` flag** OR **build sibling `cmd/shellscope-gcp`
+Decision deferred to start of step 2: **extend `whodrove-teleport`
+with `--substrate` flag** OR **build sibling `cmd/whodrove-gcp`
 binary**. Both write to the same `sessions.sqlite`. Sketch below
 assumes the sibling-binary path because it lets `internal/` packages
 stay GCP-pure (no AWS imports leaking into the GCP code path); the
 extend-existing path is fine if it turns out the GCP code is small.
 
-Subcommands (mirroring the Teleport-side `teleport-analyze`):
+Subcommands (mirroring the Teleport-side `whodrove-teleport`):
 
 - `pull --since DATE --until DATE` — fetch + populate
   `sessions.sqlite`.
@@ -226,7 +226,7 @@ Conventions for GCP-specific labels (extending `notes/06`):
 
 Selector example, identifying agent-driven GCP sessions:
 
-`shellscope-gcp label ls --selector substrate.kind=gcp-cloud-audit,operator.type=agent,gcp.ua.tool=terraform`
+`whodrove-gcp label ls --selector substrate.kind=gcp-cloud-audit,operator.type=agent,gcp.ua.tool=terraform`
 
 ```sql
 SELECT s.* FROM sessions s

@@ -16,7 +16,7 @@ cluster, so that every resulting session recording is labeled
 `sessions.sqlite` schema from `06-pipeline-design.md` so phase-1 and phase-2
 classifiers can train against a mix of fixture rows and live tenant rows.
 
-Step-3 deliverable, not step-2. Step 2's CLI (`teleport-analyze`) is reused
+Step-3 deliverable, not step-2. Step 2's CLI (`whodrove-teleport`) is reused
 unchanged on the parsing side; this file only adds a fixture *source*.
 
 ## What we're trying to produce
@@ -34,7 +34,7 @@ fixture.tbench_dataset_version=<0.1.1|0.2.x>
 fixture.harness_run_id=<uuid>
 ```
 
-…joinable to a real `<sid>.tar` recording that shellscope's existing parser
+…joinable to a real `<sid>.tar` recording that whodrove's existing parser
 can ingest. Multiply by N tasks × M agents × K models and we have a labeled
 positive cohort on the order of hundreds to low thousands of sessions for
 the cost of model API calls plus a single test VM.
@@ -111,7 +111,7 @@ decision, not a behavioral property of the agent.
 ┌───────┴────────────────────────────────────┐
 │  Controller (laptop or same VM)            │
 │  - terminal-bench harness with TshTerminal │
-│  - shellscope teleport-analyze parse       │
+│  - whodrove-teleport parse                 │
 └────────────────────────────────────────────┘
 ```
 
@@ -134,9 +134,9 @@ OSS Teleport stores recordings on the auth server's local filesystem under
 
 1. The tap-point matrix in `05-tap-points-for-detection.md` collapses to one
    tap: read the local file directly. There is no Athena, no Parquet.
-2. Audit-event discovery in step-2's CLI (`teleport-analyze pull` against
+2. Audit-event discovery in step-2's CLI (`whodrove-teleport pull` against
    Athena) does not apply on this fixture cluster. We bypass discovery and
-   feed `<sid>.tar` paths directly into `teleport-analyze parse`.
+   feed `<sid>.tar` paths directly into `whodrove-teleport parse`.
 
 This keeps the fixture pipeline cheap and offline-able. The price is that
 event-side audit data (e.g. `session.start`, `session.command` BPF events)
@@ -226,10 +226,10 @@ The orchestration layer.
        asciinema cast, and the Teleport `<sid>.tar` from the cluster's
        recordings dir.
 - `harvest.py` — for each completed run:
-  - Calls existing `teleport-analyze parse <sid>.tar` to populate the
+  - Calls existing `whodrove-teleport parse <sid>.tar` to populate the
     `sessions` table (this CLI is from `06-pipeline-design.md` and already
-    exists in `cmd/teleport-analyze/` per the working tree).
-  - Calls `teleport-analyze label set --session <sid> --key <k> --value <v>`
+    exists in `cmd/whodrove-teleport/` per the working tree).
+  - Calls `whodrove-teleport label set --session <sid> --key <k> --value <v>`
     for each fixture-derived label, setting `set_by=tbench-fixture@vN`.
   - Records `task.passed`, `task.duration_seconds`, `agent.total_tokens`
     from the t-bench result JSON as additional labels.
@@ -383,7 +383,7 @@ Two deviations from the design above worth recording:
   for why option (c) above degenerates to "read local file" on an OSS
   cluster.
 - [`notes/06-pipeline-design.md`](06-pipeline-design.md) for the SQLite
-  schema, label conventions, and `teleport-analyze` CLI that this fixture
+  schema, label conventions, and `whodrove-teleport` CLI that this fixture
   pipeline feeds.
 - [`notes/99-open-questions.md`](99-open-questions.md) for where Q-FX1
   through Q-FX6 should land if/when this plan is approved.
