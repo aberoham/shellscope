@@ -14,8 +14,15 @@ What this script does, in order:
      cluster volume.
 
 Run this from the repo root:
-    uv run --with terminal-bench python harnesses/terminal-bench-teleport/runner/run.py \\
+    uv run --with terminal-bench --with pyyaml --with pexpect \\
+        python harnesses/terminal-bench-teleport/runner/run.py \\
         --task-id hello-world --agent terminus --model openrouter/deepseek/deepseek-chat
+
+Dependencies the script needs at import time, beyond stdlib:
+    terminal-bench  the harness itself
+    pyyaml          for runner/patch_task.py to rewrite docker-compose.yaml
+    pexpect         for runner/tsh_terminal.py to drive the persistent
+                    tsh ssh session
 """
 
 from __future__ import annotations
@@ -150,6 +157,17 @@ def main() -> int:
     import time as _time
     run_started_at = _time.time()
 
+    # Force a unique --run-id so two concurrent `tb run` invocations
+    # don't collide on the wallclock-seconds default
+    # (`YYYY-MM-DD__HH-MM-SS`). When they collide, tb sees an existing
+    # dir with a lock file and interprets it as "resuming a previous
+    # run" — then errors out on the config mismatch.
+    from datetime import datetime as _dt
+    tb_run_id = (
+        _dt.now().strftime("%Y-%m-%d__%H-%M-%S")
+        + "_" + uuid.uuid4().hex[:6]
+    )
+
     # Invoke the harness in-process so our patch takes effect.
     import runpy
     saved_argv = sys.argv
@@ -159,6 +177,7 @@ def main() -> int:
         "--task-id", args.task_id,
         "--agent", args.agent,
         "--model", args.model,
+        "--run-id", tb_run_id,
         # patched is .../runs/<run_id>/<task_id>/; --dataset-path is the parent.
         "--dataset-path", str(patched.parent),
     ]

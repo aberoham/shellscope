@@ -4,5 +4,6 @@
 	shallow = true
 [submodule "harnesses/terminal-bench"]
 	path = harnesses/terminal-bench
-	url = https://github.com/harbor-framework/terminal-bench.git
+	url = https://github.com/aberoham/terminal-bench.git
+	branch = whodrove-cadence-patches
 	shallow = true
